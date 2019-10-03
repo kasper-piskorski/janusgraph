@@ -31,6 +31,7 @@ import org.apache.tinkerpop.gremlin.structure.util.StringFactory;
 import org.janusgraph.core.*;
 import org.janusgraph.core.attribute.Cmp;
 import org.janusgraph.core.schema.*;
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.diskstorage.BackendException;
 
 import org.janusgraph.diskstorage.util.Hex;
@@ -916,6 +917,8 @@ public class StandardJanusGraphTx implements JanusGraphTransaction, TypeInspecto
     }
 
     public JanusGraphVertexProperty addProperty(VertexProperty.Cardinality cardinality, JanusGraphVertex vertex, PropertyKey key, Object value) {
+        long start = System.currentTimeMillis();
+        String profilerKey = getClass().getSimpleName() + "::addProperty";
         if (key.cardinality().convert() != cardinality && cardinality != VertexProperty.Cardinality.single) {
             throw new SchemaViolationException("Key is defined for %s cardinality which conflicts with specified: %s", key.cardinality(), cardinality);
         }
@@ -959,7 +962,8 @@ public class StandardJanusGraphTx implements JanusGraphTransaction, TypeInspecto
                    3) the cardinality match (if we overwrite a set with single, we need to read all other values to delete)
                 */
 
-                if ((!config.hasVerifyUniqueness() || ((InternalRelationType) key).getConsistencyModifier() != ConsistencyModifier.LOCK) &&
+                if ((!config.hasVerifyUniqueness()
+                        || ((InternalRelationType) key).getConsistencyModifier() != ConsistencyModifier.LOCK) &&
                         !TypeUtil.hasAnyIndex(key) && cardinality == keyCardinality.convert()) {
                     //Only delete in-memory so as to not trigger a read from the database which isn't necessary because we will overwrite blindly
                     ((InternalVertex) vertex).getAddedRelations(p -> p.getType().equals(key)).forEach(propertyRemover);
@@ -972,20 +976,31 @@ public class StandardJanusGraphTx implements JanusGraphTransaction, TypeInspecto
             if (config.hasVerifyUniqueness()) {
                 //Check all unique indexes
                 for (IndexLockTuple lockTuple : uniqueIndexTuples) {
-                    if (!Iterables.isEmpty(IndexHelper.getQueryResults(lockTuple.getIndex(), lockTuple.getAll(), this)))
+                    long start2 = System.currentTimeMillis();
+                    boolean isEmpty = Iterables.isEmpty(IndexHelper.getQueryResults(lockTuple.getIndex(), lockTuple.getAll(), this));
+                    Profiler.updateChildFromCurrentTime(profilerKey, "getQueryResults", start2);
+                    if (!isEmpty)
                         throw new SchemaViolationException("Adding this property for key [%s] and value [%s] violates a uniqueness constraint [%s]", key.name(), normalizedValue, lockTuple.getIndex());
                 }
             }
+            long start2 = System.currentTimeMillis();
+            String subKey = "assignProperty";
             StandardVertexProperty prop = new StandardVertexProperty(IDManager.getTemporaryRelationID(temporaryIds.nextID()), key, (InternalVertex) vertex, normalizedValue, ElementLifeCycle.New);
-            if (config.hasAssignIDsImmediately()) {
-                graph.assignID(prop);
-            }
+
+            long start3 = System.currentTimeMillis();
+            if (config.hasAssignIDsImmediately()) graph.assignID(prop);
+            Profiler.updateChildFromCurrentTime(subKey, "assignId", start3);
+
+            long start4 = System.currentTimeMillis();
             connectRelation(prop);
+            Profiler.updateChildFromCurrentTime(subKey, "connectRelation", start4);
+
+            Profiler.updateChildFromCurrentTime(profilerKey, subKey, start2);
+            Profiler.updateFromCurrentTime(profilerKey, start);
             return prop;
         } finally {
             uniqueLock.unlock();
         }
-
     }
 
 

@@ -14,29 +14,23 @@
 
 package org.janusgraph.graphdb;
 
-import static org.janusgraph.testutil.JanusGraphAssert.assertCount;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.apache.commons.math.stat.descriptive.SummaryStatistics;
 import org.apache.tinkerpop.gremlin.structure.VertexProperty;
-import org.janusgraph.core.util.TestTimeAccumulator;
-import org.junit.Rule;
-import org.junit.rules.TestRule;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-
-import org.janusgraph.core.PropertyKey;
-import org.janusgraph.core.JanusGraphEdge;
+import org.janusgraph.TestCategory;
 import org.janusgraph.core.JanusGraphTransaction;
 import org.janusgraph.core.JanusGraphVertex;
-import org.janusgraph.TestCategory;
+import org.janusgraph.core.PropertyKey;
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.testutil.JUnitBenchmarkProvider;
 import org.janusgraph.testutil.MemoryAssess;
+import org.junit.Rule;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.rules.TestRule;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * These tests focus on the in-memory data structures of individual transactions and how they hold up to high memory pressure
  */
@@ -85,13 +79,16 @@ public abstract class JanusGraphPerformanceMemoryTest extends JanusGraphBaseTest
         finishSchema();
 
         final Random random = new Random();
-        final int rounds = 100;
-        final int commitSize = 1500;
+        final int rounds = 10;
+        final int commitSize = 2000;
+        final int threads = 1;
         final AtomicInteger uidCounter = new AtomicInteger(0);
-        Thread[] writeThreads = new Thread[4];
+
         long start = System.currentTimeMillis();
-        TestTimeAccumulator.reset();
         System.out.println("statrting writes");
+
+        /*
+        Thread[] writeThreads = new Thread[threads];
         for (int t = 0; t < writeThreads.length; t++) {
             writeThreads[t] = new Thread(() -> {
                 for (int r = 0; r < rounds; r++) {
@@ -115,14 +112,52 @@ public abstract class JanusGraphPerformanceMemoryTest extends JanusGraphBaseTest
         for (final Thread writeThread : writeThreads) {
             writeThread.join();
         }
-        System.out.println("Write time for " + (rounds * commitSize * writeThreads.length) + " vertices & edges: " + (System.currentTimeMillis() - start));
-        System.out.println("Time in driver for write: "+TestTimeAccumulator.getTotalTimeInMs());
+         */
+
+        for (int r = 0; r < rounds; r++) {
+                    JanusGraphTransaction tx = graph.newTransaction();
+                    JanusGraphVertex previous = null;
+                    for (int c = 0; c < commitSize; c++) {
+                        JanusGraphVertex v = tx.addVertex();
+                        long uid = uidCounter.incrementAndGet();
+                        v.property(VertexProperty.Cardinality.single, "uid",  uid);
+                        v.property(VertexProperty.Cardinality.single, "name",  "user" + uid);
+                        if (previous != null) {
+                            v.addEdge("friend", previous, "time", Math.abs(random.nextInt()));
+                        }
+                        previous = v;
+                    }
+                    tx.commit();
+        }
+
+        System.out.println("Write time for " + (rounds * commitSize * threads) + " vertices & edges: " + (System.currentTimeMillis() - start));
+        Profiler.printTimes();
+
+/*
         final int maxUID = uidCounter.get();
-        final int trials = 1000;
+        final int trials = 10000;
         final String fixedName = "john";
-        Thread[] readThreads = new Thread[4];
+
         start = System.currentTimeMillis();
         TestTimeAccumulator.reset();
+
+        JanusGraphTransaction tx = graph.newTransaction();
+        long randomUniqueId = random.nextInt(maxUID) + 1;
+        getVertex(tx,"uid", randomUniqueId).property(VertexProperty.Cardinality.single, "name",  fixedName);
+        for (int t1 = 1; t1 <= trials; t1++) {
+            JanusGraphVertex v = getVertex(tx,"uid", random.nextInt(maxUID) + 1);
+            assertCount(2, v.properties());
+            int count = 0;
+            for (Object e : v.query().direction(Direction.BOTH).edges()) {
+                count++;
+                assertTrue(((JanusGraphEdge) e).<Integer>value("time") >= 0);
+            }
+            assertTrue(count <= 2);
+        }
+*/
+
+        /*
+        Thread[] readThreads = new Thread[threads];
         for (int t = 0; t < readThreads.length; t++) {
             readThreads[t] = new Thread(() -> {
                 JanusGraphTransaction tx = graph.newTransaction();
@@ -148,8 +183,11 @@ public abstract class JanusGraphPerformanceMemoryTest extends JanusGraphBaseTest
         for (final Thread readThread : readThreads) {
             readThread.join();
         }
-        System.out.println("Read time for " + (trials * readThreads.length) + " vertex lookups: " + (System.currentTimeMillis() - start));
-        System.out.println("Time in driver for read: "+TestTimeAccumulator.getTotalTimeInMs());
+
+         */
+        //System.out.println("Read time for " + (trials * threads) + " vertex lookups: " + (System.currentTimeMillis() - start));
+
+
 
     }
 }

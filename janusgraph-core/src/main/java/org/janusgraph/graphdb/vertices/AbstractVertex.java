@@ -17,6 +17,7 @@ package org.janusgraph.graphdb.vertices;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import org.janusgraph.core.*;
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.graphdb.internal.AbstractElement;
 import org.janusgraph.graphdb.internal.ElementLifeCycle;
 import org.janusgraph.graphdb.internal.InternalVertex;
@@ -163,9 +164,11 @@ public abstract class AbstractVertex extends AbstractElement implements Internal
 
     @Override
     public JanusGraphEdge addEdge(String label, Vertex vertex, Object... keyValues) {
+        long start = System.currentTimeMillis();
         Preconditions.checkArgument(vertex instanceof JanusGraphVertex,"Invalid vertex provided: %s",vertex);
         JanusGraphEdge edge = tx().addEdge(it(), (JanusGraphVertex) vertex, tx().getOrCreateEdgeLabel(label));
         ElementHelper.attachProperties(edge,keyValues);
+        Profiler.updateFromCurrentTime(getClass().getSimpleName() + "::addEdge", start);
         return edge;
     }
 
