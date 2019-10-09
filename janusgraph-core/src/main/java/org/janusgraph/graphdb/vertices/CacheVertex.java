@@ -14,6 +14,7 @@
 
 package org.janusgraph.graphdb.vertices;
 
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.diskstorage.EntryList;
 import org.janusgraph.diskstorage.keycolumnvalue.SliceQuery;
 import org.janusgraph.graphdb.transaction.StandardJanusGraphTx;
@@ -53,24 +54,36 @@ public class CacheVertex extends StandardVertex {
 
     @Override
     public EntryList loadRelations(final SliceQuery query, final Retriever<SliceQuery, EntryList> lookup) {
+        long start = System.currentTimeMillis();
+        String parentKey = getClass().getSimpleName() + "::loadRelations";
         if (isNew())
             return EntryList.EMPTY_LIST;
 
         EntryList result;
         synchronized (queryCache) {
+            long start2 = System.currentTimeMillis();
             result = queryCache.get(query);
+            Profiler.updateChildFromCurrentTime(parentKey, "cacheFetch", start2);
         }
         if (result == null) {
             //First check for super
+            long start2 = System.currentTimeMillis();
             Map.Entry<SliceQuery, EntryList> superset = getSuperResultSet(query);
+            Profiler.updateChildFromCurrentTime(parentKey, "getSuperResultSet", start2);
+
             if (superset == null || superset.getValue() == null) {
                 result = lookup.get(query);
             } else {
                 result = query.getSubset(superset.getKey(), superset.getValue());
             }
+            Profiler.updateChildFromCurrentTime(parentKey, "lookup", start2);
+
+            long start3 = System.currentTimeMillis();
             addToQueryCache(query, result);
+            Profiler.updateChildFromCurrentTime(parentKey, "addToQueryCache", start3);
 
         }
+        Profiler.updateFromCurrentTime(parentKey, start);
         return result;
     }
 

@@ -34,6 +34,7 @@ import io.vavr.Tuple3;
 import io.vavr.collection.Array;
 import io.vavr.collection.Iterator;
 import io.vavr.control.Try;
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.diskstorage.BackendException;
 import org.janusgraph.diskstorage.Entry;
 import org.janusgraph.diskstorage.EntryList;
@@ -273,14 +274,26 @@ public class CQLKeyColumnValueStore implements KeyColumnValueStore {
 
     @Override
     public EntryList getSlice(KeySliceQuery query, StoreTransaction txh) throws BackendException {
-        ResultSet result = this.session.execute(this.getSlice.bind()
+        long start = System.currentTimeMillis();
+
+        BoundStatement boundStatement = this.getSlice.bind()
                 .setByteBuffer(KEY_BINDING, query.getKey().asByteBuffer())
                 .setByteBuffer(SLICE_START_BINDING, query.getSliceStart().asByteBuffer())
                 .setByteBuffer(SLICE_END_BINDING, query.getSliceEnd().asByteBuffer())
                 .setInt(LIMIT_BINDING, query.getLimit())
-                .setConsistencyLevel(getTransaction(txh).getReadConsistencyLevel()));
+                .setConsistencyLevel(getTransaction(txh).getReadConsistencyLevel());
+        Profiler.updateChildFromCurrentTime(getClass().getSimpleName() + "::getSlice", "bind", start);
 
-        return fromResultSet(result, this.getter);
+        ResultSet result = this.session.execute(boundStatement);
+
+
+        //System.out.println(query.getKey() + " ###: " + query.getSliceStart() + " ##->## " + query.getSliceEnd());
+
+        long start2 = System.currentTimeMillis();
+        EntryList entries = fromResultSet(result, this.getter);
+        Profiler.updateChildFromCurrentTime(getClass().getSimpleName() + "::getSlice", "fromResultSet", start2);
+        Profiler.updateFromCurrentTime(getClass().getSimpleName() + "::getSlice", start);
+        return entries;
     }
 
     @Override

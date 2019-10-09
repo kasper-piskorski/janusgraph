@@ -24,6 +24,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.diskstorage.keycolumnvalue.cache.KCVSCache;
 import org.janusgraph.diskstorage.log.kcvs.ExternalCachePersistor;
 import org.apache.commons.lang.StringUtils;
@@ -258,7 +259,8 @@ public class BackendTransaction implements LoggableTransaction {
      */
 
     public EntryList edgeStoreQuery(final KeySliceQuery query) {
-        return executeRead(new Callable<EntryList>() {
+        long start = System.currentTimeMillis();
+        EntryList entries = executeRead(new Callable<EntryList>() {
             @Override
             public EntryList call() throws Exception {
                 return cacheEnabled ? edgeStore.getSlice(query, storeTx) : edgeStore.getSliceNoCache(query, storeTx);
@@ -269,6 +271,8 @@ public class BackendTransaction implements LoggableTransaction {
                 return "EdgeStoreQuery";
             }
         });
+        Profiler.updateFromCurrentTime(getClass().getSimpleName() + "::edgeStoreQuery", start);
+        return entries;
     }
 
     public Map<StaticBuffer, EntryList> edgeStoreMultiQuery(final List<StaticBuffer> keys, final SliceQuery query) {
@@ -383,7 +387,8 @@ public class BackendTransaction implements LoggableTransaction {
     }
 
     public EntryList indexQuery(final KeySliceQuery query) {
-        return executeRead(new Callable<EntryList>() {
+        long start = System.currentTimeMillis();
+        EntryList entries = executeRead(new Callable<EntryList>() {
             @Override
             public EntryList call() throws Exception {
                 return cacheEnabled ? indexStore.getSlice(query, storeTx) :
@@ -395,7 +400,8 @@ public class BackendTransaction implements LoggableTransaction {
                 return "VertexIndexQuery";
             }
         });
-
+        Profiler.updateFromCurrentTime(getClass().getSimpleName() + "::indexQuery",start);
+        return entries;
     }
 
 

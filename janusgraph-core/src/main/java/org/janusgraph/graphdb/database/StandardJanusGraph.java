@@ -53,6 +53,7 @@ import org.janusgraph.core.schema.JanusGraphManagement;
 import org.janusgraph.core.schema.PropertyKeyMaker;
 import org.janusgraph.core.schema.SchemaStatus;
 import org.janusgraph.core.schema.VertexLabelMaker;
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.diskstorage.Backend;
 import org.janusgraph.diskstorage.BackendException;
 import org.janusgraph.diskstorage.BackendTransaction;
@@ -633,7 +634,8 @@ public class StandardJanusGraph implements JanusGraph {
 
     @Override
     public JanusGraphTransaction newTransaction() {
-        return buildTransaction().start();
+        //return buildTransaction().enableBatchLoading().start();
+        return buildTransaction().consistencyChecks(false).start();
     }
 
     @Override
@@ -753,8 +755,18 @@ public class StandardJanusGraph implements JanusGraph {
     }
 
     public EntryList edgeQuery(long vid, SliceQuery query, BackendTransaction tx) {
+        long start = System.currentTimeMillis();
+        String parentKey = getClass().getSimpleName() + "::edgeQuery";
         Preconditions.checkArgument(vid > 0);
-        return tx.edgeStoreQuery(new KeySliceQuery(idManager.getKey(vid), query));
+
+
+        StaticBuffer key = idManager.getKey(vid);
+        Profiler.updateChildFromCurrentTime(parentKey, "getKey", start);
+
+        EntryList entries = tx.edgeStoreQuery(new KeySliceQuery(key, query));
+        Profiler.updateFromCurrentTime(parentKey, start);
+        return entries;
+
     }
 
     public List<EntryList> edgeMultiQuery(LongArrayList vertexIdsAsLongs, SliceQuery query, BackendTransaction tx) {

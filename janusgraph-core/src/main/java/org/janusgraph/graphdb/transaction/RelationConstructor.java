@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import org.janusgraph.core.EdgeLabel;
 import org.janusgraph.core.PropertyKey;
 import org.janusgraph.core.JanusGraphRelation;
+import org.janusgraph.core.util.Profiler;
 import org.janusgraph.diskstorage.Entry;
 import org.janusgraph.graphdb.database.EdgeSerializer;
 import org.janusgraph.graphdb.internal.InternalRelation;
@@ -49,12 +50,17 @@ public class RelationConstructor {
 
             @Override
             public boolean hasNext() {
-                return iterator.hasNext();
+                long start = System.currentTimeMillis();
+                boolean hasNext = iterator.hasNext();
+                Profiler.updateChildFromCurrentTime("readTest::executeVertexQuery", "RelationConstructor::readRelation::hasNext", start);
+                return hasNext;
             }
 
             @Override
             public JanusGraphRelation next() {
-                current = readRelation(vertex, iterator.next(),tx);
+                long start = System.currentTimeMillis();
+                current = readRelation(vertex, iterator.next(), tx);
+                Profiler.updateChildFromCurrentTime("readTest::executeVertexQuery", "RelationConstructor::readRelation::next", start);
                 return current;
             }
 
