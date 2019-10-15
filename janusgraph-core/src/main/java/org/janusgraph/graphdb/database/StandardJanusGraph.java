@@ -499,7 +499,7 @@ public class StandardJanusGraph implements JanusGraph {
 
     @Override
     public JanusGraphTransaction newTransaction() {
-        return buildTransaction().start();
+        return buildTransaction()/*.consistencyChecks(false)*/.start();
     }
 
     @Override
@@ -738,6 +738,14 @@ public class StandardJanusGraph implements JanusGraph {
             CompositeIndexType iIndex = (CompositeIndexType) update.getIndex();
         }
 
+        System.out.println("mutations: ");
+        mutations.entries().forEach(System.out::println);
+        System.out.println();
+
+        System.out.println("indexUpdates: ");
+        indexUpdates.stream().map(IndexSerializer.IndexUpdate::getEntry).forEach(System.out::println);
+        System.out.println();
+
         //5) Add relation mutations
         for (Long vertexId : mutations.keySet()) {
             Preconditions.checkArgument(vertexId > 0, "Vertex has no id: %s", vertexId);
@@ -847,6 +855,7 @@ public class StandardJanusGraph implements JanusGraph {
                 try {
                     //[FAILURE] If the preparation throws an exception abort directly - nothing persisted since batch-loading cannot be enabled for schema elements
                     commitSummary = prepareCommit(addedRelations, deletedRelations, SCHEMA_FILTER, schemaMutator, tx);
+                    //System.out.println("#############SCHEMA COMMIT#################");
                     assert commitSummary.hasModifications && !commitSummary.has2iModifications;
                 } catch (Throwable e) {
                     //Roll back schema tx and escalate exception
@@ -866,6 +875,7 @@ public class StandardJanusGraph implements JanusGraph {
             //[FAILURE] Exceptions during preparation here cause the entire transaction to fail on transactional systems
             //or just the non-system part on others. Nothing has been persisted unless batch-loading
             commitSummary = prepareCommit(addedRelations, deletedRelations, hasTxIsolation ? NO_FILTER : NO_SCHEMA_FILTER, mutator, tx);
+            System.out.println("#############INSTANCE COMMIT#################");
             if (commitSummary.hasModifications) {
                 String logTxIdentifier = tx.getConfiguration().getLogIdentifier();
                 boolean hasSecondaryPersistence = logTxIdentifier != null || commitSummary.has2iModifications;

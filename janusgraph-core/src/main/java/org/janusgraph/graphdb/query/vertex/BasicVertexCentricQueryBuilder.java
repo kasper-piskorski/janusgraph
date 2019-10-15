@@ -57,6 +57,7 @@ import org.janusgraph.graphdb.types.system.SystemRelationType;
 import org.janusgraph.util.datastructures.Interval;
 import org.janusgraph.util.datastructures.PointInterval;
 import org.janusgraph.util.datastructures.RangeInterval;
+import org.javatuples.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -449,8 +450,7 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
         assert returnType != null;
         Preconditions.checkArgument(adjacentVertex == null || returnType == RelationCategory.EDGE,
                 "Vertex constraints only apply to edges");
-        if (limit <= 0)
-            return BaseVertexCentricQuery.emptyQuery();
+        if (limit <= 0) return BaseVertexCentricQuery.emptyQuery();
 
         //Prepare direction
         if (returnType == RelationCategory.PROPERTY) {
@@ -464,8 +464,7 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
 
         //Prepare constraints
         And<JanusGraphRelation> conditions = QueryUtil.constraints2QNF(tx, constraints);
-        if (conditions == null)
-            return BaseVertexCentricQuery.emptyQuery();
+        if (conditions == null) return BaseVertexCentricQuery.emptyQuery();
 
         //Don't be smart with query limit adjustments - it just messes up the caching layer and
         //penalizes when appropriate limits are set by the user!
@@ -555,49 +554,9 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
                     }
 
                     for (Direction direction : dirs) {
-                        /*
-                        Find best scoring relation type to answer this query with. We score each candidate by the number
-                        of conditions that each sort-keys satisfy. Equality conditions score higher than interval
-                        conditions since they are more restrictive. We assign additional points if the sort key
-                        satisfies the order of this query.
-                        */
-                        InternalRelationType bestCandidate = null;
-                        double bestScore = Double.NEGATIVE_INFINITY;
-                        boolean bestCandidateSupportsOrder = false;
-                        for (InternalRelationType candidate : type.getRelationIndexes()) {
-                            //Filter out those that don't apply
-                            if (!candidate.isUnidirected(Direction.BOTH) && !candidate.isUnidirected(direction)) {
-                                continue;
-                            }
-                            if (!candidate.equals(type) && candidate.getStatus() != SchemaStatus.ENABLED) continue;
-
-                            boolean supportsOrder = orders.isEmpty()
-                                    || orders.getCommonOrder() == candidate.getSortOrder();
-                            int currentOrder = 0;
-
-                            double score = 0.0;
-                            PropertyKey[] extendedSortKey = getExtendedSortKey(candidate, direction, tx);
-
-                            for (PropertyKey keyType : extendedSortKey) {
-                                if (currentOrder < orders.size() && orders.getKey(currentOrder).equals(keyType))
-                                    currentOrder++;
-
-                                Interval interval = intervalConstraints.get(keyType);
-                                if (interval == null || !interval.isPoints()) {
-                                    if (interval != null) score += 1;
-                                    break;
-                                } else {
-                                    assert interval.isPoints();
-                                    score += 5.0 / interval.getPoints().size();
-                                }
-                            }
-                            if (supportsOrder && currentOrder == orders.size()) score += 3;
-                            if (score > bestScore) {
-                                bestScore = score;
-                                bestCandidate = candidate;
-                                bestCandidateSupportsOrder = supportsOrder && currentOrder == orders.size();
-                            }
-                        }
+                        Pair<InternalRelationType, Boolean> bestCandidatePair = findBestRelationTypeCandidate(type, direction, intervalConstraints);
+                        InternalRelationType bestCandidate = bestCandidatePair.getValue0();
+                        boolean bestCandidateSupportsOrder = bestCandidatePair.getValue1();
                         Preconditions.checkArgument(bestCandidate != null,
                                 "Current graph schema does not support the specified query constraints for type: %s",
                                 type.name());
@@ -613,12 +572,57 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
                     }
                 }
             }
-            if (queries.isEmpty())
-                return BaseVertexCentricQuery.emptyQuery();
-
+            if (queries.isEmpty()) return BaseVertexCentricQuery.emptyQuery();
             conditions.add(getTypeCondition(ts));
         }
         return new BaseVertexCentricQuery(QueryUtil.simplifyQNF(conditions), dir, queries, orders, limit);
+    }
+
+    /*
+        Find best scoring relation type to answer this query with. We score each candidate by the number
+        of conditions that each sort-keys satisfy. Equality conditions score higher than interval
+        conditions since they are more restrictive. We assign additional points if the sort key
+        satisfies the order of this query.
+    */
+    private Pair<InternalRelationType, Boolean> findBestRelationTypeCandidate(InternalRelationType type, Direction direction, Map<RelationType, Interval> intervalConstraints){
+        InternalRelationType bestCandidate = null;
+        double bestScore = Double.NEGATIVE_INFINITY;
+        boolean bestCandidateSupportsOrder = false;
+        for (InternalRelationType candidate : type.getRelationIndexes()) {
+            //Filter out those that don't apply
+            if (!candidate.isUnidirected(Direction.BOTH) && !candidate.isUnidirected(direction)) {
+                continue;
+            }
+            if (!candidate.equals(type) && candidate.getStatus() != SchemaStatus.ENABLED) continue;
+
+            boolean supportsOrder = orders.isEmpty()
+                    || orders.getCommonOrder() == candidate.getSortOrder();
+            int currentOrder = 0;
+
+            double score = 0.0;
+            PropertyKey[] extendedSortKey = getExtendedSortKey(candidate, direction, tx);
+
+            for (PropertyKey keyType : extendedSortKey) {
+                if (currentOrder < orders.size() && orders.getKey(currentOrder).equals(keyType))
+                    currentOrder++;
+
+                Interval interval = intervalConstraints.get(keyType);
+                if (interval == null || !interval.isPoints()) {
+                    if (interval != null) score += 1;
+                    break;
+                } else {
+                    assert interval.isPoints();
+                    score += 5.0 / interval.getPoints().size();
+                }
+            }
+            if (supportsOrder && currentOrder == orders.size()) score += 3;
+            if (score > bestScore) {
+                bestScore = score;
+                bestCandidate = candidate;
+                bestCandidateSupportsOrder = supportsOrder && currentOrder == orders.size();
+            }
+        }
+        return new Pair<>(bestCandidate, bestCandidateSupportsOrder);
     }
 
     private void constructSliceQueries(PropertyKey[] extendedSortKey, EdgeSerializer.TypedInterval[] sortKeyConstraints,
