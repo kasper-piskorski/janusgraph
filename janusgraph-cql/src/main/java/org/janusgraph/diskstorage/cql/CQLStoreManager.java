@@ -395,6 +395,7 @@ public class CQLStoreManager extends AbstractStoreManager implements KeyColumnVa
     }
 
     // Create an async un-logged batch per partition key
+    //<table name> - <partition id - mutation>
     private void mutateManyUnlogged(Map<String, Map<StaticBuffer, KCVMutation>> mutations, StoreTransaction txh) throws BackendException {
         MaskedTimestamp commitTime = new MaskedTimestamp(txh);
         long deletionTime = commitTime.getDeletionTime(this.times);

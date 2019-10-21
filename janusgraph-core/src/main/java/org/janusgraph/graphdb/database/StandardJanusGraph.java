@@ -192,6 +192,7 @@ public class StandardJanusGraph implements JanusGraph {
         StoreFeatures storeFeatures = backend.getStoreFeatures();
         this.indexSerializer = new IndexSerializer(configuration.getConfiguration(), this.serializer, this.backend.getIndexInformation(), storeFeatures.isDistributed() && storeFeatures.isKeyOrdered());
         this.edgeSerializer = new EdgeSerializer(this.serializer);
+
         this.vertexExistenceQuery = edgeSerializer.getQuery(BaseKey.VertexExists, Direction.OUT, new EdgeSerializer.TypedInterval[0]).setLimit(1);
 
         // Collaborators (Caches)
@@ -738,6 +739,7 @@ public class StandardJanusGraph implements JanusGraph {
             CompositeIndexType iIndex = (CompositeIndexType) update.getIndex();
         }
 
+        /*
         System.out.println("mutations: ");
         mutations.entries().forEach(System.out::println);
         System.out.println();
@@ -745,6 +747,7 @@ public class StandardJanusGraph implements JanusGraph {
         System.out.println("indexUpdates: ");
         indexUpdates.stream().map(IndexSerializer.IndexUpdate::getEntry).forEach(System.out::println);
         System.out.println();
+        */
 
         //5) Add relation mutations
         for (Long vertexId : mutations.keySet()) {
@@ -875,7 +878,7 @@ public class StandardJanusGraph implements JanusGraph {
             //[FAILURE] Exceptions during preparation here cause the entire transaction to fail on transactional systems
             //or just the non-system part on others. Nothing has been persisted unless batch-loading
             commitSummary = prepareCommit(addedRelations, deletedRelations, hasTxIsolation ? NO_FILTER : NO_SCHEMA_FILTER, mutator, tx);
-            System.out.println("#############INSTANCE COMMIT#################");
+            //System.out.println("#############INSTANCE COMMIT#################");
             if (commitSummary.hasModifications) {
                 String logTxIdentifier = tx.getConfiguration().getLogIdentifier();
                 boolean hasSecondaryPersistence = logTxIdentifier != null || commitSummary.has2iModifications;

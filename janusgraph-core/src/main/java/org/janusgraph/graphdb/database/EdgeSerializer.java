@@ -243,7 +243,12 @@ public class EdgeSerializer implements RelationReader {
         DirectionID dirID = getDirID(dir, relation.isProperty() ? RelationCategory.PROPERTY : RelationCategory.EDGE);
 
         DataOutput out = serializer.getDataOutput(DEFAULT_CAPACITY);
-        int valuePosition;
+
+        /**
+         * COLUMN = RelationTypeID + dirID +
+         * if edge -> otherVertexId + ...
+         * else (property) -> propertyValue + ...
+         * */
         IDHandler.writeRelationType(out, typeId, dirID, type.isInvisibleType());
         Multiplicity multiplicity = type.multiplicity();
 
@@ -254,10 +259,10 @@ public class EdgeSerializer implements RelationReader {
             writeInlineTypes(sortKey, relation, out, tx, InlineType.KEY);
         }
         int keyEndPos = out.getPosition();
-
         long relationId = relation.longId();
 
         //How multiplicity is handled for edges and properties is slightly different
+        int valuePosition;
         if (relation.isEdge()) {
             long otherVertexId = relation.getVertex((position + 1) % 2).longId();
             if (multiplicity.isConstrained()) {
@@ -299,6 +304,9 @@ public class EdgeSerializer implements RelationReader {
             }
         }
 
+        /**
+         * VALUE
+         */
         //Write signature
         long[] signature = type.getSignature();
         writeInlineTypes(signature, relation, out, tx, InlineType.SIGNATURE);

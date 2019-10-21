@@ -29,6 +29,7 @@ public class CQLGraphPerformanceMemoryTest extends JanusGraphPerformanceMemoryTe
 
     @BeforeAll
     public static void beforeClass() {
+        //TODO remove if want to use local cassandra
         CassandraStorageSetup.startCleanEmbedded();
     }
 }

@@ -15,10 +15,19 @@
 package org.janusgraph.graphdb;
 
 import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import junit.framework.TestCase;
 import org.apache.commons.math.stat.descriptive.SummaryStatistics;
 import org.apache.tinkerpop.gremlin.structure.Direction;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.apache.tinkerpop.gremlin.structure.VertexProperty;
 import org.janusgraph.TestCategory;
+import org.janusgraph.core.Cardinality;
 import org.janusgraph.core.JanusGraphEdge;
 import org.janusgraph.core.JanusGraphTransaction;
 import org.janusgraph.core.JanusGraphVertex;
@@ -191,7 +200,7 @@ public abstract class JanusGraphPerformanceMemoryTest extends JanusGraphBaseTest
     @Test
     public void testPlainVertex() {
         int batches = 1;
-        int txCount = 2;
+        int txCount = 1;
         long start = System.currentTimeMillis();
         for (int i = 0; i < batches; i++) {
             JanusGraphTransaction tx = graph.newTransaction();
@@ -205,9 +214,17 @@ public abstract class JanusGraphPerformanceMemoryTest extends JanusGraphBaseTest
 
     @Test
     public void testVertexWithLabel() {
-        int batches = 200;
-        int txCount = 5000;
+        int batches = 1;
+        int txCount = 1;
         long start = System.currentTimeMillis();
+        for (int i = 0; i < batches; i++) {
+            JanusGraphTransaction tx = graph.newTransaction();
+            for (int j = 0; j < txCount; j++) {
+                tx.addVertex("pupa");
+            }
+            tx.commit();
+        }
+
         for (int i = 0; i < batches; i++) {
             JanusGraphTransaction tx = graph.newTransaction();
             for (int j = 0; j < txCount; j++) {
@@ -219,15 +236,55 @@ public abstract class JanusGraphPerformanceMemoryTest extends JanusGraphBaseTest
     }
 
     @Test
-    public void testVertexWithProperty() {
-        int batches = 200;
-        int txCount = 5000;
+    public void testVerticesWithLabeledEdge() {
+        int batches = 1;
+        int txCount = 1;
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < batches; i++) {
+            JanusGraphTransaction tx = graph.newTransaction();
+            for (int j = 0; j < txCount; j++) {
+                JanusGraphVertex vertexA = tx.addVertex();
+                JanusGraphVertex vertexB = tx.addVertex();
+                vertexA.addEdge("pupaEdge", vertexB);
+            }
+            tx.commit();
+        }
+
+        System.out.println("label time: " + (System.currentTimeMillis() - start));
+    }
+
+    @Test
+    public void testVertexWithUnindexedProperty() {
+        String propertyName ="VERTEX_LABEL";
+        final int batches = 1;
+        final int txCount = 1;
         long start = System.currentTimeMillis();
         for (int i = 0 ; i < batches ; i++) {
             JanusGraphTransaction tx = graph.newTransaction();
             for(int j = 0 ; j < txCount ; j++) {
                 JanusGraphVertex v4 = tx.addVertex();
-                v4.property("VERTEX_LABEL", "pupa");
+                v4.property(propertyName, "pupa");
+            }
+            tx.commit();
+        }
+        System.out.println("property time: " + (System.currentTimeMillis() - start));
+    }
+
+    @Test
+    public void testVertexWithIndexedProperty() {
+        String propertyName ="VERTEX_LABEL";
+        PropertyKey property = mgmt.makePropertyKey(propertyName).dataType(String.class).make();
+        mgmt.buildIndex(propertyName, Vertex.class).addKey(property).buildCompositeIndex();
+        mgmt.commit();
+
+        final int batches = 1;
+        final int txCount = 1;
+        long start = System.currentTimeMillis();
+        for (int i = 0 ; i < batches ; i++) {
+            JanusGraphTransaction tx = graph.newTransaction();
+            for(int j = 0 ; j < txCount ; j++) {
+                JanusGraphVertex v4 = tx.addVertex();
+                v4.property(propertyName, "pupa");
             }
             tx.commit();
         }
@@ -269,6 +326,71 @@ public abstract class JanusGraphPerformanceMemoryTest extends JanusGraphBaseTest
             tx.commit();
         }
         System.out.println("property time: " + (System.currentTimeMillis() - start));
+    }
+
+    @Test
+    public void test() throws ExecutionException, InterruptedException {
+
+        String indexProperty ="INDEX";
+        String labelProperty ="LABEL_ID";
+        PropertyKey property = mgmt.makePropertyKey(indexProperty).dataType(String.class).make();
+        PropertyKey property2 = mgmt.makePropertyKey(labelProperty).dataType(Long.class).make();
+        mgmt.buildIndex(indexProperty, Vertex.class).addKey(property).buildCompositeIndex();
+        mgmt.buildIndex(labelProperty, Vertex.class).addKey(property2).buildCompositeIndex();
+        mgmt.commit();
+
+        List<CompletableFuture<Void>> asyncInsertions = new ArrayList<>();
+        // We need a good amount of parallelism to have a good chance to spot possible issues. Don't use smaller values.
+        final int numberOfConcurrentTransactions = 8;
+        final int commitSize = 3000;
+        final int txs = 5;
+        ExecutorService executorService = Executors.newFixedThreadPool(numberOfConcurrentTransactions);
+
+        final long start = System.currentTimeMillis();
+        for (int i = 0; i < numberOfConcurrentTransactions; i++) {
+            CompletableFuture<Void> asyncInsert = CompletableFuture.supplyAsync(() -> {
+                final long threadId = Thread.currentThread().getId();
+                System.out.println("threadId: " + threadId);
+
+                for(int txi = 0 ; txi < txs ; txi++) {
+                    try (JanusGraphTransaction tx = graph.newTransaction()) {
+                        final long idShift = threadId * commitSize * txs;
+                        for (int j = 0; j < commitSize; j++) {
+                            final long id = idShift + j;
+                            final String index = "index-" + id;
+                            JanusGraphVertex attr1 = tx.addVertex("ATTRIBUTE");
+                            attr1.property(indexProperty, index);
+                            attr1.property(labelProperty, 1L);
+
+                            JanusGraphVertex attr2 = tx.addVertex("ATTRIBUTE");
+                            attr2.property(indexProperty, index);
+                            attr2.property(labelProperty, 2L);
+
+                            JanusGraphVertex attr3 = tx.addVertex("ATTRIBUTE");
+                            attr3.property(indexProperty, index);
+                            attr3.property(labelProperty, 3L);
+                        }
+                        tx.commit();
+                    }
+                }
+
+                return null;
+            }, executorService);
+            asyncInsertions.add(asyncInsert);
+        }
+        CompletableFuture.allOf(asyncInsertions.toArray(new CompletableFuture[]{})).get();
+
+        final long multiplicity = numberOfConcurrentTransactions * commitSize*txs;
+        final long noOfConcepts = multiplicity * 3;
+        final long totalTime = System.currentTimeMillis() - start;
+        System.out.println("Concepts: " + noOfConcepts + " totalTime: " + totalTime + " throughput: " + noOfConcepts*1000*60/(totalTime));
+
+
+
+        //TestCase.assertEquals(multiplicity, numOfPersons);
+        //TestCase.assertEquals(multiplicity, numOfNames);
+        //TestCase.assertEquals(multiplicity, numOfSurnames);
+        //TestCase.assertEquals(multiplicity, numOfAges);
     }
 }
 

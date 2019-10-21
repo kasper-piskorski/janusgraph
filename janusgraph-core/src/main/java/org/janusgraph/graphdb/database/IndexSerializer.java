@@ -783,6 +783,10 @@ public class IndexSerializer {
 
     private Entry getIndexEntry(CompositeIndexType index, RecordEntry[] record, JanusGraphElement element) {
         DataOutput out = serializer.getDataOutput(1 + 8 + 8 * record.length + 4 * 8);
+
+        /**
+         * Column = ElementLongID + record relation ids
+         */
         out.putByte(FIRST_INDEX_COLUMN_BYTE);
         if (index.getCardinality() != Cardinality.SINGLE) {
             VariableLong.writePositive(out, element.longId());
@@ -792,6 +796,12 @@ public class IndexSerializer {
                 }
             }
         }
+
+        /**
+         * Value =
+         *  if element isa vertex -> ElementLongID
+         *  else                  -> RelationIdentifierLong
+         */
         int valuePosition = out.getPosition();
         if (element instanceof JanusGraphVertex) {
             VariableLong.writePositive(out, element.longId());
