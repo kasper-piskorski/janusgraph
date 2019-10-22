@@ -170,21 +170,21 @@ public interface CQLConfigOptions {
             "local-max-connections-per-host",
             "The maximum number of connections that can be created per host for local datacenter",
             ConfigOption.Type.FIXED,
-            1);
+            256);
 
     ConfigOption<Integer> REMOTE_MAX_CONNECTIONS_PER_HOST = new ConfigOption<>(
             CQL_NS,
             "remote-max-connections-per-host",
             "The maximum number of connections that can be created per host for remote datacenter",
             ConfigOption.Type.FIXED,
-            1);
+            256);
 
     ConfigOption<Integer> MAX_REQUESTS_PER_CONNECTION = new ConfigOption<>(
             CQL_NS,
             "max-requests-per-connection",
             "The maximum number of requests that can be executed concurrently on a connection.",
             ConfigOption.Type.FIXED,
-            1024);
+            2048);
 
 
     // SSL

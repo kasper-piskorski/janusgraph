@@ -155,7 +155,6 @@ public class CQLStoreManager extends AbstractStoreManager implements KeyColumnVa
                 .set(METRICS_PREFIX, METRICS_SYSTEM_PREFIX_DEFAULT);
 
         Boolean onlyUseLocalConsistency = configuration.get(ONLY_USE_LOCAL_CONSISTENCY_FOR_SYSTEM_OPERATIONS);
-
         Boolean useExternalLocking = configuration.get(USE_EXTERNAL_LOCKING);
 
         StandardStoreFeatures.Builder fb = new StandardStoreFeatures.Builder();
@@ -226,7 +225,6 @@ public class CQLStoreManager extends AbstractStoreManager implements KeyColumnVa
                     .withString(DefaultDriverOption.SSL_TRUSTSTORE_PATH, configuration.get(SSL_TRUSTSTORE_LOCATION))
                     .withString(DefaultDriverOption.SSL_TRUSTSTORE_PASSWORD, configuration.get(SSL_TRUSTSTORE_PASSWORD));
         }
-
         configLoaderBuilder.withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE, configuration.get(LOCAL_MAX_CONNECTIONS_PER_HOST));
         configLoaderBuilder.withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE, configuration.get(REMOTE_MAX_CONNECTIONS_PER_HOST));
         configLoaderBuilder.withInt(DefaultDriverOption.CONNECTION_MAX_REQUESTS, configuration.get(MAX_REQUESTS_PER_CONNECTION));
