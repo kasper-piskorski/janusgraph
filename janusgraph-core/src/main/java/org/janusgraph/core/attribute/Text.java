@@ -34,7 +34,6 @@ import com.google.common.collect.Sets;
  * Comparison relations for text objects. These comparisons are based on a tokenized representation
  * of the text, i.e. the text is considered as a set of word tokens.
  *
- * @author Matthias Broecheler (me@matthiasb.com)
  */
 
 public enum Text implements JanusGraphPredicate {
@@ -65,7 +64,7 @@ public enum Text implements JanusGraphPredicate {
 
         @Override
         public boolean isValidCondition(Object condition) {
-            return condition != null && condition instanceof String && StringUtils.isNotBlank((String) condition);
+            return condition instanceof String && StringUtils.isNotBlank((String) condition);
         }
         @Override
         public String toString() {
@@ -93,7 +92,7 @@ public enum Text implements JanusGraphPredicate {
 
         @Override
         public boolean isValidCondition(Object condition) {
-            return condition != null && condition instanceof String;
+            return condition instanceof String;
         }
 
         @Override
@@ -123,7 +122,7 @@ public enum Text implements JanusGraphPredicate {
 
         @Override
         public boolean isValidCondition(Object condition) {
-            return condition != null && condition instanceof String && StringUtils.isNotBlank(condition.toString());
+            return condition instanceof String && StringUtils.isNotBlank(condition.toString());
         }
 
         @Override
@@ -150,7 +149,7 @@ public enum Text implements JanusGraphPredicate {
 
         @Override
         public boolean isValidCondition(Object condition) {
-            return condition != null && condition instanceof String;
+            return condition instanceof String;
         }
 
         @Override
@@ -176,7 +175,7 @@ public enum Text implements JanusGraphPredicate {
 
         @Override
         public boolean isValidCondition(Object condition) {
-            return condition != null && condition instanceof String && StringUtils.isNotBlank(condition.toString());
+            return condition instanceof String && StringUtils.isNotBlank(condition.toString());
         }
 
         @Override
@@ -207,7 +206,7 @@ public enum Text implements JanusGraphPredicate {
 
         @Override
         public boolean isValidCondition(Object condition) {
-            return condition != null && condition instanceof String && StringUtils.isNotBlank(condition.toString());
+            return condition instanceof String && StringUtils.isNotBlank(condition.toString());
         }
         @Override
         public String toString() {
@@ -240,7 +239,7 @@ public enum Text implements JanusGraphPredicate {
 
         @Override
         public boolean isValidCondition(Object condition) {
-            return condition != null && condition instanceof String && StringUtils.isNotBlank(condition.toString());
+            return condition instanceof String && StringUtils.isNotBlank(condition.toString());
         }
         @Override
         public String toString() {
@@ -255,8 +254,6 @@ public enum Text implements JanusGraphPredicate {
      * - 0 for strings of one or two characters
      * - 1 for strings of three, four or five characters
      * - 2 for strings of more than five characters
-     * @param value
-     * @param term
      * @return true if {@code term} is similar to {@code value} 
      */
     private static boolean isFuzzy(String term, String value){

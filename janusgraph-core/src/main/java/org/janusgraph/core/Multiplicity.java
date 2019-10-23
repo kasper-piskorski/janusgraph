@@ -21,7 +21,6 @@ import org.apache.tinkerpop.gremlin.structure.Direction;
  * The multiplicity of edges between vertices for a given label. Multiplicity here is understood in the same sense as
  * for UML class diagrams <a href="https://en.wikipedia.org/wiki/Class_diagram#Multiplicity">https://en.wikipedia.org/wiki/Class_diagram#Multiplicity</a>
  *
- * @author Matthias Broecheler (me@matthiasb.com)
  */
 public enum Multiplicity {
 
@@ -58,7 +57,6 @@ public enum Multiplicity {
     /**
      * Whether this multiplicity imposes any constraint on the number of edges that may exist between a pair of vertices.
      *
-     * @return
      */
     public boolean isConstrained() {
         return this!=MULTI;
@@ -72,9 +70,6 @@ public enum Multiplicity {
 
     /**
      * If this multiplicity implies edge uniqueness in the given direction for any given vertex.
-     *
-     * @param direction
-     * @return
      */
     public boolean isUnique(Direction direction) {
         switch (direction) {

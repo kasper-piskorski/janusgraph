@@ -14,15 +14,48 @@
 
 package org.janusgraph.graphdb.database.management;
 
-import static org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration.REGISTRATION_NS;
-import static org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration.REGISTRATION_TIME;
-import static org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration.ROOT_NS;
-import static org.janusgraph.graphdb.database.management.RelationTypeIndexWrapper.RELATION_INDEX_SEPARATOR;
-
-import org.janusgraph.core.*;
-import org.janusgraph.core.schema.*;
+import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
+import org.apache.commons.lang.StringUtils;
+import org.apache.tinkerpop.gremlin.structure.Direction;
+import org.apache.tinkerpop.gremlin.structure.Edge;
+import org.apache.tinkerpop.gremlin.structure.Element;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
+import org.janusgraph.core.Cardinality;
+import org.janusgraph.core.Connection;
+import org.janusgraph.core.EdgeLabel;
+import org.janusgraph.core.JanusGraph;
+import org.janusgraph.core.JanusGraphEdge;
+import org.janusgraph.core.JanusGraphException;
+import org.janusgraph.core.JanusGraphVertex;
+import org.janusgraph.core.JanusGraphVertexProperty;
+import org.janusgraph.core.Multiplicity;
+import org.janusgraph.core.PropertyKey;
+import org.janusgraph.core.RelationType;
+import org.janusgraph.core.VertexLabel;
+import org.janusgraph.core.schema.ConsistencyModifier;
+import org.janusgraph.core.schema.EdgeLabelMaker;
+import org.janusgraph.core.schema.Index;
+import org.janusgraph.core.schema.JanusGraphConfiguration;
+import org.janusgraph.core.schema.JanusGraphIndex;
+import org.janusgraph.core.schema.JanusGraphManagement;
+import org.janusgraph.core.schema.JanusGraphSchemaElement;
+import org.janusgraph.core.schema.JanusGraphSchemaType;
+import org.janusgraph.core.schema.Parameter;
+import org.janusgraph.core.schema.PropertyKeyMaker;
+import org.janusgraph.core.schema.RelationTypeIndex;
+import org.janusgraph.core.schema.SchemaAction;
+import org.janusgraph.core.schema.SchemaStatus;
+import org.janusgraph.core.schema.VertexLabelMaker;
 import org.janusgraph.diskstorage.BackendException;
-import org.janusgraph.diskstorage.configuration.*;
+import org.janusgraph.diskstorage.configuration.BasicConfiguration;
+import org.janusgraph.diskstorage.configuration.ConfigOption;
+import org.janusgraph.diskstorage.configuration.ModifiableConfiguration;
+import org.janusgraph.diskstorage.configuration.TransactionalConfiguration;
+import org.janusgraph.diskstorage.configuration.UserModifiableConfiguration;
 import org.janusgraph.diskstorage.configuration.backend.KCVSConfiguration;
 import org.janusgraph.diskstorage.keycolumnvalue.scan.ScanMetrics;
 import org.janusgraph.diskstorage.keycolumnvalue.scan.StandardScanner;
@@ -31,13 +64,30 @@ import org.janusgraph.graphdb.database.IndexSerializer;
 import org.janusgraph.graphdb.database.StandardJanusGraph;
 import org.janusgraph.graphdb.database.cache.SchemaCache;
 import org.janusgraph.graphdb.database.serialize.DataOutput;
-import org.janusgraph.graphdb.internal.*;
+import org.janusgraph.graphdb.internal.ElementCategory;
+import org.janusgraph.graphdb.internal.InternalRelationType;
+import org.janusgraph.graphdb.internal.JanusGraphSchemaCategory;
+import org.janusgraph.graphdb.internal.Order;
+import org.janusgraph.graphdb.internal.Token;
 import org.janusgraph.graphdb.olap.VertexJobConverter;
 import org.janusgraph.graphdb.olap.job.IndexRemoveJob;
 import org.janusgraph.graphdb.olap.job.IndexRepairJob;
 import org.janusgraph.graphdb.query.QueryUtil;
 import org.janusgraph.graphdb.transaction.StandardJanusGraphTx;
-import org.janusgraph.graphdb.types.*;
+import org.janusgraph.graphdb.types.CompositeIndexType;
+import org.janusgraph.graphdb.types.IndexField;
+import org.janusgraph.graphdb.types.IndexType;
+import org.janusgraph.graphdb.types.MixedIndexType;
+import org.janusgraph.graphdb.types.ParameterIndexField;
+import org.janusgraph.graphdb.types.ParameterType;
+import org.janusgraph.graphdb.types.SchemaSource;
+import org.janusgraph.graphdb.types.StandardEdgeLabelMaker;
+import org.janusgraph.graphdb.types.StandardPropertyKeyMaker;
+import org.janusgraph.graphdb.types.StandardRelationTypeMaker;
+import org.janusgraph.graphdb.types.TypeDefinitionCategory;
+import org.janusgraph.graphdb.types.TypeDefinitionDescription;
+import org.janusgraph.graphdb.types.TypeDefinitionMap;
+import org.janusgraph.graphdb.types.VertexLabelVertex;
 import org.janusgraph.graphdb.types.indextype.IndexTypeWrapper;
 import org.janusgraph.graphdb.types.system.BaseKey;
 import org.janusgraph.graphdb.types.system.SystemTypeManager;
@@ -45,27 +95,21 @@ import org.janusgraph.graphdb.types.vertices.EdgeLabelVertex;
 import org.janusgraph.graphdb.types.vertices.JanusGraphSchemaVertex;
 import org.janusgraph.graphdb.types.vertices.PropertyKeyVertex;
 import org.janusgraph.graphdb.types.vertices.RelationTypeVertex;
-
-import org.apache.tinkerpop.gremlin.structure.Direction;
-import org.apache.tinkerpop.gremlin.structure.Edge;
-import org.apache.tinkerpop.gremlin.structure.Element;
-import org.apache.tinkerpop.gremlin.structure.Vertex;
-
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
-
-import javax.annotation.Nullable;
-
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -74,14 +118,14 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-/**
- * @author Matthias Broecheler (me@matthiasb.com)
- * @author Joshua Shinavier (http://fortytwo.net)
- */
+import static org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration.REGISTRATION_NS;
+import static org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration.REGISTRATION_TIME;
+import static org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration.ROOT_NS;
+import static org.janusgraph.graphdb.database.management.RelationTypeIndexWrapper.RELATION_INDEX_SEPARATOR;
+
 public class ManagementSystem implements JanusGraphManagement {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ManagementSystem.class);
-
+    private static final Logger LOG = LoggerFactory.getLogger(ManagementSystem.class);
     private static final String CURRENT_INSTANCE_SUFFIX = "(current)";
 
     private final StandardJanusGraph graph;
@@ -135,7 +179,6 @@ public class ManagementSystem implements JanusGraphManagement {
             if (option.getType() == ConfigOption.Type.GLOBAL_OFFLINE) {
                 //Verify that there no other open JanusGraph graph instance and no open transactions
                 Set<String> openInstances = getOpenInstancesInternal();
-                assert openInstances.size() > 0;
                 Preconditions.checkArgument(openInstances.size() < 2, "Cannot change offline config option [%s] since multiple instances are currently open: %s", option, openInstances);
                 Preconditions.checkArgument(openInstances.contains(graph.getConfiguration().getUniqueGraphId()),
                         "Only one open instance (" + openInstances.iterator().next() + "), but it's not the current one (" + graph.getConfiguration().getUniqueGraphId() + ")");
@@ -147,7 +190,7 @@ public class ManagementSystem implements JanusGraphManagement {
 
     public Set<String> getOpenInstancesInternal() {
         Set<String> openInstances = Sets.newHashSet(modifyConfig.getContainedNamespaces(REGISTRATION_NS));
-        LOGGER.debug("Open instances: {}", openInstances);
+        LOG.debug("Open instances: {}", openInstances);
         return openInstances;
     }
 
@@ -218,10 +261,6 @@ public class ManagementSystem implements JanusGraphManagement {
 
     private void close() {
         isOpen = false;
-    }
-
-    public StandardJanusGraphTx getWrappedTx() {
-        return transaction;
     }
 
     private JanusGraphEdge addSchemaEdge(JanusGraphVertex out, JanusGraphVertex in, TypeDefinitionCategory def, Object modifier) {
@@ -332,7 +371,6 @@ public class ManagementSystem implements JanusGraphManagement {
         //Don't use SchemaCache to make code more compact and since we don't need the extra performance here
         JanusGraphVertex v = Iterables.getOnlyElement(QueryUtil.getVertices(transaction, BaseKey.SchemaName, JanusGraphSchemaCategory.getRelationTypeName(composedName)), null);
         if (v == null) return null;
-        assert v instanceof InternalRelationType;
         return new RelationTypeIndexWrapper((InternalRelationType) v);
     }
 
@@ -340,7 +378,6 @@ public class ManagementSystem implements JanusGraphManagement {
     public Iterable<RelationTypeIndex> getRelationIndexes(RelationType type) {
         Preconditions.checkArgument(type instanceof InternalRelationType, "Invalid relation type provided: %s", type);
         return Iterables.transform(Iterables.filter(((InternalRelationType) type).getRelationIndexes(), internalRelationType -> !type.equals(internalRelationType)), new Function<InternalRelationType, RelationTypeIndex>() {
-            @Nullable
             @Override
             public RelationTypeIndex apply(@Nullable InternalRelationType internalType) {
                 return new RelationTypeIndexWrapper(internalType);
@@ -373,10 +410,7 @@ public class ManagementSystem implements JanusGraphManagement {
     public Iterable<JanusGraphIndex> getGraphIndexes(Class<? extends Element> elementType) {
         return StreamSupport.stream(
                 QueryUtil.getVertices(transaction, BaseKey.SchemaCategory, JanusGraphSchemaCategory.GRAPHINDEX).spliterator(), false)
-                .map(janusGraphVertex -> {
-                    assert janusGraphVertex instanceof JanusGraphSchemaVertex;
-                    return ((JanusGraphSchemaVertex) janusGraphVertex).asIndexType();
-                })
+                .map(janusGraphVertex -> ((JanusGraphSchemaVertex) janusGraphVertex).asIndexType())
                 .filter(indexType -> indexType.getElement().subsumedBy(elementType))
                 .map(JanusGraphIndexWrapper::new)
                 .collect(Collectors.toList());
@@ -556,7 +590,6 @@ public class ManagementSystem implements JanusGraphManagement {
      *
      * @param g              the graph through which to read index information
      * @param graphIndexName the name of a graph index to watch
-     * @return
      */
     public static GraphIndexStatusWatcher awaitGraphIndexStatus(JanusGraph g, String graphIndexName) {
         return new GraphIndexStatusWatcher(g, graphIndexName);
@@ -573,7 +606,6 @@ public class ManagementSystem implements JanusGraphManagement {
      * @param g                 the graph through which to read index information
      * @param relationIndexName the name of the relation index to watch
      * @param relationTypeName  the type on the relation index to watch
-     * @return
      */
     public static RelationIndexStatusWatcher awaitRelationIndexStatus(JanusGraph g, String relationIndexName, String relationTypeName) {
         return new RelationIndexStatusWatcher(g, relationIndexName, relationTypeName);
@@ -873,7 +905,7 @@ public class ManagementSystem implements JanusGraphManagement {
     }
 
     private static class GraphCacheEvictionCompleteTrigger implements Callable<Boolean> {
-        private static final Logger log = LoggerFactory.getLogger(GraphCacheEvictionCompleteTrigger.class);
+        private static final Logger LOG = LoggerFactory.getLogger(GraphCacheEvictionCompleteTrigger.class);
         private final String graphName;
 
         private GraphCacheEvictionCompleteTrigger(String graphName) {
@@ -882,7 +914,7 @@ public class ManagementSystem implements JanusGraphManagement {
 
         @Override
         public Boolean call() {
-            log.info("Graph {} has been removed from the graph cache on every JanusGraph node in the cluster.", graphName);
+            LOG.info("Graph {} has been removed from the graph cache on every JanusGraph node in the cluster.", graphName);
             return true;
         }
     }
@@ -933,13 +965,7 @@ public class ManagementSystem implements JanusGraphManagement {
             this.graph = graph;
             this.schemaVertexId = vertex.longId();
             this.newStatus = newStatus;
-            this.propertyKeys = Sets.newHashSet(Iterables.transform(keys, new Function<PropertyKey, Long>() {
-                @Nullable
-                @Override
-                public Long apply(@Nullable PropertyKey propertyKey) {
-                    return propertyKey.longId();
-                }
-            }));
+            this.propertyKeys = Sets.newHashSet(Iterables.transform(keys, (Function<PropertyKey, Long>) propertyKey -> propertyKey.longId()));
         }
 
         @Override
@@ -989,7 +1015,7 @@ public class ManagementSystem implements JanusGraphManagement {
         @Override
         public boolean equals(Object oth) {
             if (this == oth) return true;
-            else if (oth == null || !getClass().isInstance(oth)) return false;
+            else if (!getClass().isInstance(oth)) return false;
             return schemaVertexId == ((UpdateStatusTrigger) oth).schemaVertexId;
         }
 
@@ -1027,9 +1053,7 @@ public class ManagementSystem implements JanusGraphManagement {
         for (JanusGraphEdge edge : vertex.getEdges(TypeDefinitionCategory.INDEX_FIELD, Direction.OUT)) {
             if (!keys.contains(edge.vertex(Direction.IN))) continue; //Only address edges with matching keys
             TypeDefinitionDescription desc = edge.valueOrNull(BaseKey.SchemaDefinitionDesc);
-            assert desc.getCategory() == TypeDefinitionCategory.INDEX_FIELD;
             Parameter[] parameters = (Parameter[]) desc.getModifier();
-            assert parameters[parameters.length - 1].key().equals(ParameterType.STATUS.getName());
             if (parameters[parameters.length - 1].value().equals(status)) continue;
 
             Parameter[] paraCopy = Arrays.copyOf(parameters, parameters.length);
@@ -1045,29 +1069,6 @@ public class ManagementSystem implements JanusGraphManagement {
     public IndexJobFuture getIndexJobStatus(Index index) {
         IndexIdentifier indexId = new IndexIdentifier(index);
         return graph.getBackend().getScanJobStatus(indexId);
-    }
-
-    public static class IndexJobStatus extends JobStatus {
-
-        private final ScanMetrics metrics;
-
-        public IndexJobStatus(State state, ScanMetrics metrics) {
-            super(state, metrics == null ? 0 : metrics.get(ScanMetrics.Metric.SUCCESS));
-            this.metrics = metrics;
-        }
-
-        public ScanMetrics getMetrics() {
-            return metrics;
-        }
-
-        @Override
-        public String toString() {
-            String msg = "Job status: " + getState().toString() + ". ";
-            if (metrics != null) msg += String.format("Processed %s records successfully and failed on %s records.",
-                    metrics.get(ScanMetrics.Metric.SUCCESS), metrics.get(ScanMetrics.Metric.FAILURE));
-            return msg;
-        }
-
     }
 
     private static class IndexIdentifier {
@@ -1105,10 +1106,9 @@ public class ManagementSystem implements JanusGraphManagement {
         @Override
         public boolean equals(Object other) {
             if (this == other) return true;
-            else if (other == null || !getClass().isInstance(other)) return false;
+            else if (!getClass().isInstance(other)) return false;
             IndexIdentifier oth = (IndexIdentifier) other;
-            return indexName.equals(oth.indexName) &&
-                    (relationTypeName == oth.relationTypeName || (relationTypeName != null && relationTypeName.equals(oth.relationTypeName)));
+            return indexName.equals(oth.indexName) && (relationTypeName == oth.relationTypeName || (relationTypeName != null && relationTypeName.equals(oth.relationTypeName)));
         }
 
         public Consumer<ScanMetrics> getIndexJobFinisher() {
@@ -1129,12 +1129,12 @@ public class ManagementSystem implements JanusGraphManagement {
                                 management.commit();
                             }
                         }
-                        LOGGER.debug("Index update job successful for [{}]", IndexIdentifier.this.toString());
+                        LOG.debug("Index update job successful for [{}]", IndexIdentifier.this.toString());
                     } else {
-                        LOGGER.error("Index update job unsuccessful for [{}]. Check logs", IndexIdentifier.this.toString());
+                        LOG.error("Index update job unsuccessful for [{}]. Check logs", IndexIdentifier.this.toString());
                     }
                 } catch (Throwable e) {
-                    LOGGER.error("Error encountered when updating index after job finished [" + IndexIdentifier.this.toString() + "]: ", e);
+                    LOG.error("Error encountered when updating index after job finished [" + IndexIdentifier.this.toString() + "]: ", e);
                 }
             };
         }
@@ -1155,7 +1155,7 @@ public class ManagementSystem implements JanusGraphManagement {
             InternalRelationType relType = (InternalRelationType) schemaVertex;
             if (relType.getBaseType() != null) {
                 newName = composeRelationTypeIndexName(relType.getBaseType(), newName);
-            } else assert !(element instanceof RelationTypeIndex);
+            }
 
             JanusGraphSchemaCategory cat = relType.isEdgeLabel() ?
                     JanusGraphSchemaCategory.EDGELABEL : JanusGraphSchemaCategory.PROPERTYKEY;
@@ -1198,9 +1198,7 @@ public class ManagementSystem implements JanusGraphManagement {
         } else if (element instanceof JanusGraphIndex) {
             Preconditions.checkArgument(element instanceof JanusGraphIndexWrapper, "Invalid schema element provided: %s", element);
             IndexType index = ((JanusGraphIndexWrapper) element).getBaseIndex();
-            assert index instanceof IndexTypeWrapper;
             SchemaSource base = ((IndexTypeWrapper) index).getSchemaBase();
-            assert base instanceof JanusGraphSchemaVertex;
             return (JanusGraphSchemaVertex) base;
         }
         throw new IllegalArgumentException("Invalid schema element provided: " + element);
@@ -1216,9 +1214,6 @@ public class ManagementSystem implements JanusGraphManagement {
 
     /**
      * Retrieves the consistency level for a schema element (types and internal indexes)
-     *
-     * @param element
-     * @return
      */
     @Override
     public ConsistencyModifier getConsistency(JanusGraphSchemaElement element) {
@@ -1237,9 +1232,6 @@ public class ManagementSystem implements JanusGraphManagement {
      * Note, that it is possible to have a race condition here if two threads simultaneously try to change the
      * consistency level. However, this is resolved when the consistency level is being read by taking the
      * first one and deleting all existing attached consistency levels upon modification.
-     *
-     * @param element
-     * @param consistency
      */
     @Override
     public void setConsistency(JanusGraphSchemaElement element, ConsistencyModifier consistency) {
@@ -1272,12 +1264,10 @@ public class ManagementSystem implements JanusGraphManagement {
     /**
      * Sets time-to-live for those schema types that support it
      *
-     * @param type
      * @param duration Note that only 'seconds' granularity is supported
      */
     @Override
-    public void setTTL(JanusGraphSchemaType type,
-                       final Duration duration) {
+    public void setTTL(JanusGraphSchemaType type, Duration duration) {
         if (!graph.getBackend().getStoreFeatures().hasCellTTL())
             throw new UnsupportedOperationException("The storage engine does not support TTL");
         if (type instanceof VertexLabelVertex) {
@@ -1285,7 +1275,6 @@ public class ManagementSystem implements JanusGraphManagement {
         } else {
             Preconditions.checkArgument(type instanceof EdgeLabelVertex || type instanceof PropertyKeyVertex, "TTL is not supported for type " + type.getClass().getSimpleName());
         }
-        Preconditions.checkArgument(type instanceof JanusGraphSchemaVertex);
 
         Integer ttlSeconds = (duration.isZero()) ?
                 null :
@@ -1309,7 +1298,6 @@ public class ManagementSystem implements JanusGraphManagement {
             typeVertex = (JanusGraphSchemaVertex) element;
         } else if (element instanceof JanusGraphIndex) {
             IndexType index = ((JanusGraphIndexWrapper) element).getBaseIndex();
-            assert index instanceof IndexTypeWrapper;
             SchemaSource base = ((IndexTypeWrapper) index).getSchemaBase();
             typeVertex = (JanusGraphSchemaVertex) base;
         } else throw new IllegalArgumentException("Invalid schema element: " + element);
@@ -1396,7 +1384,7 @@ public class ManagementSystem implements JanusGraphManagement {
     @Override
     public <T extends RelationType> Iterable<T> getRelationTypes(Class<T> clazz) {
         Preconditions.checkNotNull(clazz);
-        final Iterable<? extends JanusGraphVertex> types;
+        Iterable<? extends JanusGraphVertex> types;
         if (PropertyKey.class.equals(clazz)) {
             types = QueryUtil.getVertices(transaction, BaseKey.SchemaCategory, JanusGraphSchemaCategory.PROPERTYKEY);
         } else if (EdgeLabel.class.equals(clazz)) {

@@ -21,7 +21,6 @@ import org.apache.tinkerpop.gremlin.process.traversal.P;
 /**
  * Comparison relations for geographic shapes.
  *
- * @author Matthias Broecheler (me@matthiasb.com)
  */
 
 public enum Geo implements JanusGraphPredicate {
@@ -140,7 +139,7 @@ public enum Geo implements JanusGraphPredicate {
 
     @Override
     public boolean isValidCondition(Object condition) {
-        return condition != null && condition instanceof Geoshape;
+        return condition instanceof Geoshape;
     }
 
     @Override

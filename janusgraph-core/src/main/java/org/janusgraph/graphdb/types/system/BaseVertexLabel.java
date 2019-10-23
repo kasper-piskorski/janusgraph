@@ -22,9 +22,7 @@ import org.janusgraph.graphdb.internal.InternalVertexLabel;
 import java.util.ArrayList;
 import java.util.Collection;
 
-/**
- * @author Matthias Broecheler (me@matthiasb.com)
- */
+
 public class BaseVertexLabel extends EmptyVertex implements InternalVertexLabel {
 
     public static final BaseVertexLabel DEFAULT_VERTEXLABEL = new BaseVertexLabel(Vertex.DEFAULT_LABEL);
@@ -63,15 +61,5 @@ public class BaseVertexLabel extends EmptyVertex implements InternalVertexLabel 
     @Override
     public String toString() {
         return name();
-    }
-
-    @Override
-    public Collection<PropertyKey> mappedProperties() {
-        return new ArrayList<>();
-    }
-
-    @Override
-    public Collection<Connection> mappedConnections() {
-        return new ArrayList<>();
     }
 }

@@ -27,7 +27,6 @@ import java.util.List;
  * A JanusGraphEdge connects two {@link JanusGraphVertex}. It extends the functionality provided by Blueprint's {@link Edge} and
  * is a special case of a {@link JanusGraphRelation}.
  *
- * @author Matthias Br&ouml;cheler (http://www.matthiasb.com)
  * @see Edge
  * @see JanusGraphRelation
  * @see EdgeLabel
@@ -40,8 +39,7 @@ public interface JanusGraphEdge extends JanusGraphRelation, Edge {
      * @return edge label of this edge
      */
     default EdgeLabel edgeLabel() {
-        assert getType() instanceof EdgeLabel;
-        return (EdgeLabel)getType();
+        return (EdgeLabel) getType();
     }
 
     /**
@@ -76,8 +74,8 @@ public interface JanusGraphEdge extends JanusGraphRelation, Edge {
 
     @Override
     default Iterator<Vertex> vertices(Direction direction) {
-        final List<Vertex> vertices;
-        if (direction==Direction.BOTH) {
+        List<Vertex> vertices;
+        if (direction == Direction.BOTH) {
             vertices = ImmutableList.of(vertex(Direction.OUT), vertex(Direction.IN));
         } else {
             vertices = ImmutableList.of(vertex(direction));

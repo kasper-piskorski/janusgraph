@@ -19,15 +19,13 @@ import org.janusgraph.core.PropertyKey;
 import org.janusgraph.core.RelationType;
 import org.janusgraph.core.VertexLabel;
 
-/**
- * @author Matthias Broecheler (me@matthiasb.com)
- */
+
 public interface SchemaInspector {
 
-   /* ---------------------------------------------------------------
-    * Schema
-    * ---------------------------------------------------------------
-    */
+    /* ---------------------------------------------------------------
+     * Schema
+     * ---------------------------------------------------------------
+     */
 
     /**
      * Checks whether a type with the specified name exists.
@@ -71,26 +69,23 @@ public interface SchemaInspector {
     /**
      * Returns the property key with the given name. If automatic type making is enabled, it will make the property key
      * using the configured default type maker if a key with the given name does not exist.
-     *
+     * <p>
      * The default implementation simply calls the {@link #getOrCreatePropertyKey(String name) getOrCreatePropertyKey} method
      *
-     * @param name name of the property key to return
+     * @param name  name of the property key to return
      * @param value the value of the property key. This param is not used by the default
-     * implementation
+     *              implementation
      * @return the property key with the given name
      * @throws IllegalArgumentException if a property key with the given name does not exist or if the
      *                                  type with the given name is not a property key
      * @see PropertyKey
      */
     default PropertyKey getOrCreatePropertyKey(String name, Object value) {
-       return getOrCreatePropertyKey(name);
+        return getOrCreatePropertyKey(name);
     }
 
     /**
      * Returns the property key with the given name. If it does not exist, NULL is returned
-     *
-     * @param name
-     * @return
      */
     PropertyKey getPropertyKey(String name);
 
@@ -116,24 +111,16 @@ public interface SchemaInspector {
 
     /**
      * Returns the edge label with the given name. If it does not exist, NULL is returned
-     * @param name
-     * @return
      */
     EdgeLabel getEdgeLabel(String name);
 
     /**
      * Whether a vertex label with the given name exists in the graph.
-     *
-     * @param name
-     * @return
      */
     boolean containsVertexLabel(String name);
 
     /**
      * Returns the vertex label with the given name. If such does not exist, NULL is returned.
-     *
-     * @param name
-     * @return
      */
     VertexLabel getVertexLabel(String name);
 
@@ -142,9 +129,6 @@ public interface SchemaInspector {
      * automatically created through the registered {@link org.janusgraph.core.schema.DefaultSchemaMaker}.
      * <p>
      * Attempting to automatically create a vertex label might cause an exception depending on the configuration.
-     *
-     * @param name
-     * @return
      */
     VertexLabel getOrCreateVertexLabel(String name);
 

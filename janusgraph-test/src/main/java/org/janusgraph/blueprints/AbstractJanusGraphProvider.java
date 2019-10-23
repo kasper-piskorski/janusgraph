@@ -43,7 +43,6 @@ import org.janusgraph.graphdb.relations.CacheVertexProperty;
 import org.janusgraph.graphdb.relations.SimpleJanusGraphProperty;
 import org.janusgraph.graphdb.relations.StandardEdge;
 import org.janusgraph.graphdb.relations.StandardVertexProperty;
-import org.janusgraph.graphdb.tinkerpop.JanusGraphVariables;
 import org.janusgraph.graphdb.transaction.StandardJanusGraphTx;
 import org.janusgraph.graphdb.types.VertexLabelVertex;
 import org.janusgraph.graphdb.types.system.EmptyVertex;
@@ -60,9 +59,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * @author Matthias Broecheler (me@matthiasb.com)
- */
+
 public abstract class AbstractJanusGraphProvider extends AbstractGraphProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractJanusGraphProvider.class);
@@ -87,9 +84,7 @@ public abstract class AbstractJanusGraphProvider extends AbstractGraphProvider {
         StandardVertexProperty.class,
         CacheVertexProperty.class,
         SimpleJanusGraphProperty.class,
-        CacheVertexProperty.class,
-
-        JanusGraphVariables.class);
+        CacheVertexProperty.class);
 
 
     @Override

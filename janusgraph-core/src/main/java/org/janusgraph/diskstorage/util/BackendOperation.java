@@ -37,9 +37,7 @@ public class BackendOperation {
     private static final double PERTURBATION_PERCENTAGE = 0.2;
 
     private static Duration pertubTime(Duration duration) {
-        Duration newDuration = duration.dividedBy((int) (2.0 / (1 + (random.nextDouble() * 2 - 1.0) * PERTURBATION_PERCENTAGE)));
-        assert !duration.isZero() : duration;
-        return newDuration;
+        return duration.dividedBy((int) (2.0 / (1 + (random.nextDouble() * 2 - 1.0) * PERTURBATION_PERCENTAGE)));
     }
 
     public static <V> V execute(Callable<V> exe, Duration totalWaitTime) throws JanusGraphException {
@@ -51,7 +49,6 @@ public class BackendOperation {
     }
 
     public static <V> V executeDirect(Callable<V> exe, Duration totalWaitTime) throws BackendException {
-        Preconditions.checkArgument(!totalWaitTime.isZero(), "Need to specify a positive waitTime: %s", totalWaitTime);
         long maxTime = System.currentTimeMillis() + totalWaitTime.toMillis();
         Duration waitTime = pertubTime(BASE_REATTEMPT_TIME);
         BackendException lastException;
@@ -67,7 +64,7 @@ public class BackendOperation {
                 } while ((ex = ex.getCause()) != null);
 
 
-                if (storeEx != null && storeEx instanceof TemporaryBackendException) {
+                if (storeEx instanceof TemporaryBackendException) {
                     lastException = storeEx; // if this is a temporary exception, don't throw immediately but retry for a totalWaitTime time before throwing
                 } else if (e instanceof BackendException) {
                     throw (BackendException) e;
@@ -86,7 +83,7 @@ public class BackendOperation {
                     throw new PermanentBackendException("Interrupted while waiting to retry failed backend operation", r);
                 }
             } else {
-                break;
+                break; // TODO: super lol to while(true) and else break;, refactor this beauty at some point
             }
             waitTime = pertubTime(waitTime.multipliedBy(2));
         }
@@ -114,8 +111,6 @@ public class BackendOperation {
      * @param provider Transactions provider, will provide transaction on which execute the above operation
      * @param times Provider of timestamp, it is used to get the Time (Timestamp) to set on the transaction which will execute the operation
      * @param maxTime maxTime for which an operation will be retried, this is because sometimes the Database might need some time to startup or reply to havy workload
-     * @param <R>
-     * @return
      * @throws JanusGraphException if the operation fails
      */
     public static <R> R execute( Transactional<R> exe, TransactionalProvider provider, TimestampProvider times, Duration maxTime) throws JanusGraphException {

@@ -86,7 +86,6 @@ import org.janusgraph.graphdb.relations.EdgeDirection;
 import org.janusgraph.graphdb.tinkerpop.JanusGraphFeatures;
 import org.janusgraph.graphdb.tinkerpop.JanusGraphIoRegistry;
 import org.janusgraph.graphdb.tinkerpop.JanusGraphIoRegistryV1d0;
-import org.janusgraph.graphdb.tinkerpop.JanusGraphVariables;
 import org.janusgraph.graphdb.tinkerpop.optimize.AdjacentVertexFilterOptimizerStrategy;
 import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphIoRegistrationStrategy;
 import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphLocalQueryOptimizerStrategy;
@@ -200,7 +199,7 @@ public class StandardJanusGraph implements JanusGraph {
         this.schemaCache = configuration.getTypeCache(typeCacheRetrieval);
 
 
-        // Transaction(?) Log Manager
+        // Log Manager
         Log managementLog = backend.getSystemMgmtLog();
         this.managementLogger = new ManagementLogger(this, managementLog, schemaCache, this.timestampProvider);
         managementLog.registerReader(ReadMarker.fromNow(), this.managementLogger);
@@ -250,10 +249,6 @@ public class StandardJanusGraph implements JanusGraph {
         return StringFactory.graphString(this, getConfiguration().getBackendDescription());
     }
 
-    public Variables variables() {
-        return new JanusGraphVariables(getBackend().getUserConfiguration());
-    }
-
     @Override
     public org.apache.commons.configuration.Configuration configuration() {
         return getConfiguration().getConfigurationAtOpen();
@@ -268,6 +263,11 @@ public class StandardJanusGraph implements JanusGraph {
         } else {
             return (I) builder.graph(this).onMapper(mapper -> mapper.addRegistry(JanusGraphIoRegistry.getInstance())).create();
         }
+    }
+
+    @Override
+    public Variables variables() {
+        return null;
     }
 
     @Override
@@ -328,7 +328,7 @@ public class StandardJanusGraph implements JanusGraph {
         public void doOpen() {
             StandardJanusGraphTx tx = localJanusTransaction.get();
             if (tx != null && tx.isOpen()) throw Transaction.Exceptions.transactionAlreadyOpen();
-            tx = (StandardJanusGraphTx) newThreadBoundTransaction();
+            tx = newThreadBoundTransaction();
             localJanusTransaction.set(tx);
         }
 
@@ -436,7 +436,6 @@ public class StandardJanusGraph implements JanusGraph {
 
             IOUtils.closeQuietly(idAssigner);
             IOUtils.closeQuietly(backend);
-            IOUtils.closeQuietly(queryCache);
             IOUtils.closeQuietly(serializer);
         } finally {
             isOpen = false;
@@ -447,7 +446,7 @@ public class StandardJanusGraph implements JanusGraph {
             // TP3's test suite requires that this be of type ISE
             throw new IllegalStateException("Unable to close transaction", Iterables.getOnlyElement(txCloseExceptions.values()));
         } else if (1 < txCloseExceptions.size()) {
-            throw new IllegalStateException(String.format("Unable to close %s transactions (see warnings in log output for details)",
+            throw new IllegalStateException(String.format("Unable to close %s transactions (see warnings in LOG output for details)",
                     txCloseExceptions.size()));
         }
     }
@@ -658,12 +657,9 @@ public class StandardJanusGraph implements JanusGraph {
      * 2) The TTL configured for the label any of the relation end point vertices (if exists)
      *
      * @param rel relation to determine the TTL for
-     * @return
      */
     public static int getTTL(InternalRelation rel) {
-        assert rel.isNew();
         InternalRelationType baseType = (InternalRelationType) rel.getType();
-        assert baseType.getBaseType() == null;
         int ttl = 0;
         Integer ettl = baseType.getTTL();
         if (ettl > 0) ttl = ettl;
@@ -675,15 +671,12 @@ public class StandardJanusGraph implements JanusGraph {
     }
 
     public static int getTTL(InternalVertex v) {
-        assert v.hasId();
         if (IDManager.VertexIDType.UnmodifiableVertex.is(v.longId())) {
-            assert v.isNew() : "Should not be able to add relations to existing static vertices: " + v;
             return ((InternalVertexLabel) v.vertexLabel()).getTTL();
         } else return 0;
     }
 
     private static class ModificationSummary {
-
         final boolean hasModifications;
         final boolean has2iModifications;
 
@@ -757,7 +750,6 @@ public class StandardJanusGraph implements JanusGraph {
             List<Entry> deletions = new ArrayList<>(Math.max(10, edges.size() / 10));
             for (InternalRelation edge : edges) {
                 InternalRelationType baseType = (InternalRelationType) edge.getType();
-                assert baseType.getBaseType() == null;
 
                 for (InternalRelationType type : baseType.getRelationIndexes()) {
                     if (type.getStatus() == SchemaStatus.DISABLED) continue;
@@ -788,7 +780,6 @@ public class StandardJanusGraph implements JanusGraph {
         //6) Add index updates
         boolean has2iMods = false;
         for (IndexSerializer.IndexUpdate indexUpdate : indexUpdates) {
-            assert indexUpdate.isAddition() || indexUpdate.isDeletion();
             if (indexUpdate.isCompositeIndex()) {
                 IndexSerializer.IndexUpdate<StaticBuffer, Entry> update = indexUpdate;
                 if (update.isAddition())
@@ -833,11 +824,11 @@ public class StandardJanusGraph implements JanusGraph {
         ModificationSummary commitSummary;
 
         try {
-            //3.1 Log transaction (write-ahead log) if enabled
+            //3.1 Log transaction (write-ahead LOG) if enabled
             if (logTransaction) {
-                //[FAILURE] Inability to log transaction fails the transaction by escalation since it's likely due to unavailability of primary
+                //[FAILURE] Inability to LOG transaction fails the transaction by escalation since it's likely due to unavailability of primary
                 //storage backend.
-                Preconditions.checkNotNull(txLog, "Transaction log is null");
+                Preconditions.checkNotNull(txLog, "Transaction LOG is null");
                 txLog.add(txLogHeader.serializeModifications(serializer, LogTxStatus.PRECOMMIT, tx, addedRelations, deletedRelations), txLogHeader.getLogKey());
             }
 
@@ -858,8 +849,6 @@ public class StandardJanusGraph implements JanusGraph {
                 try {
                     //[FAILURE] If the preparation throws an exception abort directly - nothing persisted since batch-loading cannot be enabled for schema elements
                     commitSummary = prepareCommit(addedRelations, deletedRelations, SCHEMA_FILTER, schemaMutator, tx);
-                    //System.out.println("#############SCHEMA COMMIT#################");
-                    assert commitSummary.hasModifications && !commitSummary.has2iModifications;
                 } catch (Throwable e) {
                     //Roll back schema tx and escalate exception
                     schemaMutator.rollback();
@@ -885,7 +874,7 @@ public class StandardJanusGraph implements JanusGraph {
 
                 //1. Commit storage - failures lead to immediate abort
 
-                //1a. Add success message to tx log which will be committed atomically with all transactional changes so that we can recover secondary failures
+                //1a. Add success message to tx LOG which will be committed atomically with all transactional changes so that we can recover secondary failures
                 //    This should not throw an exception since the mutations are just cached. If it does, it will be escalated since its critical
                 if (logTransaction) {
                     txLog.add(txLogHeader.serializePrimary(serializer,
@@ -931,7 +920,7 @@ public class StandardJanusGraph implements JanusGraph {
                                 userlogSuccess = true;
                             } catch (Throwable e) {
                                 status = LogTxStatus.SECONDARY_FAILURE;
-                                LOG.error("Could not user-log committed transaction [" + transactionId + "] to " + logTxIdentifier, e);
+                                LOG.error("Could not user-LOG committed transaction [" + transactionId + "] to " + logTxIdentifier, e);
                             }
                         }
                     } finally {
@@ -941,7 +930,7 @@ public class StandardJanusGraph implements JanusGraph {
                             try {
                                 txLog.add(txLogHeader.serializeSecondary(serializer, status, indexFailures, userlogSuccess), txLogHeader.getLogKey());
                             } catch (Throwable e) {
-                                LOG.error("Could not tx-log secondary persistence status on transaction [" + transactionId + "]", e);
+                                LOG.error("Could not tx-LOG secondary persistence status on transaction [" + transactionId + "]", e);
                             }
                         }
                     }

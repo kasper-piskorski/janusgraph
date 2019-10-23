@@ -18,9 +18,7 @@ import org.janusgraph.diskstorage.Entry;
 import org.janusgraph.diskstorage.StaticBuffer;
 import org.janusgraph.diskstorage.util.RecordIterator;
 
-/**
- * @author Matthias Broecheler (me@matthiasb.com)
- */
+
 
 public interface KeyIterator extends RecordIterator<StaticBuffer> {
 
@@ -34,7 +32,6 @@ public interface KeyIterator extends RecordIterator<StaticBuffer> {
      * depending on the implementation, hence it is important to iterate over
      * (and close) the RecordIterator before calling {@link #next()} or {@link #hasNext()}.
      *
-     * @return
      */
     RecordIterator<Entry> getEntries();
 

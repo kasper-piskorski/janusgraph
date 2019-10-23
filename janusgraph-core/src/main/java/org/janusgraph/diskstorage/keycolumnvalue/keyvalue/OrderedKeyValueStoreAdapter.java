@@ -36,8 +36,6 @@ import java.util.*;
  * passed into and read through the {@link KeyColumnValueStore} have that length. If this length is
  * static, specifying that length will make the representation of a {@link KeyColumnValueStore} in a {@link OrderedKeyValueStore}
  * more concise and more efficient.
- *
- * @author Matthias Br&ouml;cheler (me@matthiasb.com);
  */
 public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
 
@@ -71,13 +69,12 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
 
     @Override
     public Map<StaticBuffer,EntryList> getSlice(List<StaticBuffer> keys, SliceQuery query, StoreTransaction txh) throws BackendException {
-        final List<KVQuery> queries = new ArrayList<>(keys.size());
+        List<KVQuery> queries = new ArrayList<>(keys.size());
         for (StaticBuffer key : keys) {
             queries.add(convertQuery(new KeySliceQuery(key, query)));
         }
-        final Map<KVQuery,RecordIterator<KeyValueEntry>> results = store.getSlices(queries,txh);
-        final Map<StaticBuffer,EntryList> convertedResults = new HashMap<>(keys.size());
-        assert queries.size()==keys.size();
+        Map<KVQuery,RecordIterator<KeyValueEntry>> results = store.getSlices(queries,txh);
+        Map<StaticBuffer,EntryList> convertedResults = new HashMap<>(keys.size());
         for (int i = 0; i < queries.size(); i++) {
             convertedResults.put(keys.get(i),convert(results.get(queries.get(i))));
         }
@@ -104,10 +101,10 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
 
     @Override
     public KeyIterator getKeys(KeyRangeQuery keyQuery, StoreTransaction txh) throws BackendException {
-        final KVQuery query = new KVQuery(
+        KVQuery query = new KVQuery(
                 concatenatePrefix(adjustToLength(keyQuery.getKeyStart()), keyQuery.getSliceStart()),
                 concatenatePrefix(adjustToLength(keyQuery.getKeyEnd()), keyQuery.getSliceEnd()), keycolumn -> {
-                    final StaticBuffer key = getKey(keycolumn);
+                    StaticBuffer key = getKey(keycolumn);
                     return !(key.compareTo(keyQuery.getKeyStart()) < 0 || key.compareTo(keyQuery.getKeyEnd()) >= 0)
                             && columnInRange(keycolumn, keyQuery.getSliceStart(), keyQuery.getSliceEnd());
                 },
@@ -157,7 +154,7 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
         }
     }
 
-    private final StaticArrayEntry.GetColVal<KeyValueEntry,StaticBuffer> kvEntryGetter = new StaticArrayEntry.GetColVal<KeyValueEntry,StaticBuffer>() {
+    private StaticArrayEntry.GetColVal<KeyValueEntry,StaticBuffer> kvEntryGetter = new StaticArrayEntry.GetColVal<KeyValueEntry,StaticBuffer>() {
 
         @Override
         public StaticBuffer getColumn(KeyValueEntry element) {
@@ -199,12 +196,12 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
         return length;
     }
 
-    final KeyValueEntry concatenate(StaticBuffer front, Entry entry) {
+    KeyValueEntry concatenate(StaticBuffer front, Entry entry) {
         return new KeyValueEntry(concatenate(front, entry.getColumnAs(StaticBuffer.STATIC_FACTORY)),
                 entry.getValueAs(StaticBuffer.STATIC_FACTORY));
     }
 
-    final KVQuery convertQuery(KeySliceQuery query) {
+    KVQuery convertQuery(KeySliceQuery query) {
         Predicate<StaticBuffer> filter = Predicates.alwaysTrue();
         if (!hasFixedKeyLength()) {
             filter = keyAndColumn -> equalKey(keyAndColumn, query.getKey());
@@ -215,7 +212,7 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
                 filter,query.getLimit());
     }
 
-    final StaticBuffer concatenate(StaticBuffer front, StaticBuffer end) {
+    StaticBuffer concatenate(StaticBuffer front, StaticBuffer end) {
         return concatenate(front, end, true);
     }
 
@@ -224,7 +221,7 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
     }
 
     private StaticBuffer concatenate(StaticBuffer front, StaticBuffer end, boolean appendLength) {
-        final boolean addKeyLength = !hasFixedKeyLength() && appendLength;
+        boolean addKeyLength = !hasFixedKeyLength() && appendLength;
         int length = getLength(front);
 
         byte[] result = new byte[length + end.length() + (addKeyLength ? variableKeyLengthSize : 0)];
